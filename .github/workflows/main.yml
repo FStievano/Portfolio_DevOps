@@ -2,9 +2,9 @@ name: CI/CD Portfolio Pipeline
 
 on:
   push:
-    branches: [ main ]
+    branches: [ master ]
   pull_request:
-    branches: [ main ]
+    branches: [ master ]
 
 permissions:
   contents: read
@@ -28,7 +28,6 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
 
-      # Validação obrigatória do index.html
       - name: Verificar existência do index.html
         run: |
           if [ ! -f index.html ]; then
@@ -36,7 +35,6 @@ jobs:
             exit 1
           fi
 
-      # Bloqueio de arquivos > 500KB
       - name: Verificar tamanho dos arquivos (Max 500KB)
         run: |
           LARGE_FILES=$(find . -type f -not -path '*/.*' -size +500k)
@@ -45,26 +43,24 @@ jobs:
             exit 1
           fi
 
-      # Varredura de termos sensíveis e TODOs
       - name: Scanner de termos proibidos (TODO, FIXME, senhas)
         run: |
           if grep -rE "TODO|FIXME|senha|password" . --exclude-dir=.git; then
-            echo "ERRO: Foram encontrados termos sensíveis ou comentários pendentes."
+            echo "ERRO: Foram encontrados termos senisveis ou comentarios pendentes."
             exit 1
           fi
 
-      # Linter de HTML e Links (Exige instalação de ferramentas simples)
       - name: Validar HTML e Links
         run: |
           npm install -g htmlhint linkinator
           htmlhint index.html
-          linkinator index.html --recurse --skip "linkedin.com" 
-          # Nota: Algumas redes sociais bloqueiam bots, por isso o skip opcional
+          linkinator index.html --recurse --skip "linkedin.com"
 
-  # ETAPA 2: Deploy (CD)
+  # ETAPA 2: Publicação Automática (CD)
   deploy:
     needs: lint-and-validate
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # Ajustado para disparar apenas quando o push for na master
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
@@ -85,9 +81,7 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@v4
 
-      # ETAPA 4: Notificação em caso de falha
       - name: Notificar falha
         if: failure()
         run: |
           echo "O Deploy falhou! Verifique os logs no GitHub Actions."
-          # Aqui você poderia configurar um Webhook de Discord ou Slack
