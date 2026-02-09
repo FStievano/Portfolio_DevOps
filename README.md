@@ -1,0 +1,1 @@
+![CI/CD Status](https://github.com/FStievano/Portfolio_DevOps/actions/workflows/main.yml/badge.svg)
