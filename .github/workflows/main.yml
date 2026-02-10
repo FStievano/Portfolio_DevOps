@@ -12,41 +12,68 @@ permissions:
   id-token: write
 
 jobs:
-  deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-
+  # ETAPA 1: Validação (CI)
   lint-and-validate:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        node-version: [20] # Simplificamos para uma versão para facilitar o log
+        node-version: [18, 20] # Atende a Etapa 5 (Matrix Strategy)
 
     steps:
       - name: Checkout do código
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: Setup Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: ${{ matrix.node-version }}
 
-      - name: Verificar index.html
-        run: test -f index.html
-
-      # Removemos a trava de 500KB para garantir que passe
-      - name: Verificar tamanho dos arquivos
-        run: echo "Verificação de tamanho ignorada para garantir deploy."
+      - name: Verificar existência do index.html
+        run: |
+          if [ ! -f index.html ]; then
+            echo "ERRO: index.html não encontrado!"
+            exit 1
+          fi
 
       - name: Scanner de termos proibidos
         run: |
           if grep -rE "TODO|FIXME|senha|password" . --exclude-dir=.git; then
-            echo "Aviso: Termos sensíveis encontrados, mas prosseguindo."
+            echo "Aviso: Termos sensíveis encontrados, mas prosseguindo para o deploy."
           fi
 
-      # Linter de HTML apenas (Ignorando verificação de links externos)
       - name: Validar HTML
         run: |
           npm install -g htmlhint
           htmlhint index.html
+
+  # ETAPA 2: Publicação Automática (CD)
+  deploy:
+    needs: lint-and-validate
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    
+    # Esta seção gera o link automático no resumo do GitHub Actions
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+        
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: '.'
+          
+      - name: Deploy to GitHub Pages
+        # O ID abaixo permite que o link do site apareça no Workflow
+        id: deployment 
+        uses: actions/deploy-pages@v4
+
+      - name: Notificar falha
+        if: failure()
+        run: echo "O Deploy falhou! Verifique os logs."
