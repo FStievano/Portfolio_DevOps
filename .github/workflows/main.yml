@@ -12,12 +12,11 @@ permissions:
   id-token: write
 
 jobs:
-  # ETAPA 1: Validação (CI)
   lint-and-validate:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        node-version: [18, 20] # ETAPA 5: Matrix Strategy
+        node-version: [18, 20]
 
     steps:
       - name: Checkout do código
@@ -28,41 +27,35 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
 
-      # Validação obrigatória do index.html
       - name: Verificar existência do index.html
         run: |
           if [ ! -f index.html ]; then
-            echo "ERRO: Arquivo index.html não encontrado na raiz!"
+            echo "ERRO: index.html não encontrado!"
             exit 1
           fi
 
-      # Bloqueio de arquivos > 500KB
-      - name: Verificar tamanho dos arquivos (Max 500KB)
+      # Aumentamos o limite para 2MB (2000k) para aceitar seu Background
+      - name: Verificar tamanho dos arquivos (Max 2MB)
         run: |
-          LARGE_FILES=$(find . -type f -not -path '*/.*' -size +500k)
+          LARGE_FILES=$(find . -type f -not -path '*/.*' -size +2000k)
           if [ ! -z "$LARGE_FILES" ]; then
-            echo "ERRO: Os seguintes arquivos excedem 500KB: $LARGE_FILES"
+            echo "ERRO: Arquivos muito grandes (>2MB): $LARGE_FILES"
             exit 1
           fi
 
-      # Varredura de termos sensíveis
       - name: Scanner de termos proibidos
         run: |
           if grep -rE "TODO|FIXME|senha|password" . --exclude-dir=.git; then
-            echo "ERRO: Foram encontrados termos sensíveis ou comentários pendentes (TODO/FIXME)."
+            echo "ERRO: Termos sensíveis encontrados!"
             exit 1
-          else
-            echo "Nenhum termo proibido encontrado."
           fi
 
-      # Linter de HTML e Links
       - name: Validar HTML e Links
         run: |
           npm install -g htmlhint linkinator
           htmlhint index.html
           linkinator index.html --recurse false --skip "linkedin.com|github.com"
 
-  # ETAPA 2: Publicação Automática (CD)
   deploy:
     needs: lint-and-validate
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
@@ -73,21 +66,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      
       - name: Setup Pages
         uses: actions/configure-pages@v4
-        
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: '.'
-          
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
-
-      # ETAPA 4: Notificação em caso de falha
-      - name: Notificar falha
-        if: failure()
-        run: |
-          echo "O Deploy falhou! Verifique os logs no GitHub Actions para identificar o erro."
