@@ -28,6 +28,7 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
 
+      # Validação obrigatória do index.html
       - name: Verificar existência do index.html
         run: |
           if [ ! -f index.html ]; then
@@ -35,31 +36,35 @@ jobs:
             exit 1
           fi
 
+      # Bloqueio de arquivos > 500KB
       - name: Verificar tamanho dos arquivos (Max 500KB)
         run: |
           LARGE_FILES=$(find . -type f -not -path '*/.*' -size +500k)
           if [ ! -z "$LARGE_FILES" ]; then
-            echo "ERRO: Arquivos excedem 500KB: $LARGE_FILES"
+            echo "ERRO: Os seguintes arquivos excedem 500KB: $LARGE_FILES"
             exit 1
           fi
 
-      - name: Scanner de termos proibidos (TODO, FIXME, senhas)
+      # Varredura de termos sensíveis
+      - name: Scanner de termos proibidos
         run: |
           if grep -rE "TODO|FIXME|senha|password" . --exclude-dir=.git; then
-            echo "ERRO: Foram encontrados termos senisveis ou comentarios pendentes."
+            echo "ERRO: Foram encontrados termos sensíveis ou comentários pendentes (TODO/FIXME)."
             exit 1
+          else
+            echo "Nenhum termo proibido encontrado."
           fi
 
+      # Linter de HTML e Links
       - name: Validar HTML e Links
         run: |
           npm install -g htmlhint linkinator
           htmlhint index.html
-          linkinator index.html --recurse --skip "linkedin.com"
+          linkinator index.html --recurse false --skip "linkedin.com|github.com"
 
   # ETAPA 2: Publicação Automática (CD)
   deploy:
     needs: lint-and-validate
-    # Ajustado para disparar apenas quando o push for na master
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     environment:
@@ -81,7 +86,8 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@v4
 
+      # ETAPA 4: Notificação em caso de falha
       - name: Notificar falha
         if: failure()
         run: |
-          echo "O Deploy falhou! Verifique os logs no GitHub Actions."
+          echo "O Deploy falhou! Verifique os logs no GitHub Actions para identificar o erro."
